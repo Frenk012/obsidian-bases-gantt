@@ -6,7 +6,8 @@ import {
   NullValue,
   type Value,
 } from 'obsidian';
-import { formatDateForGantt, parseObsidianDate } from './date-utils';
+import { formatDateForGantt, parseObsidianDate } from './helpers/date-utils';
+import { getDeps } from './helpers/utils';
 
 /** Extended task type carrying the original file path for click-to-open. */
 export interface GanttTask extends FrappeTask {
@@ -277,12 +278,9 @@ function sortByDependencies(tasks: GanttTask[]): GanttTask[] {
   for (const t of tasks) {
     const deps = new Set<string>();
     if (t.dependencies) {
-      const depList = Array.isArray(t.dependencies)
-        ? t.dependencies
-        : t.dependencies.split(',');
-      for (const d of depList) {
-        const id = d.trim();
-        if (id && taskMap.has(id)) deps.add(id);
+      const depList = getDeps(t.dependencies);
+      for (const id of depList) {
+        if (taskMap.has(id)) deps.add(id);
       }
     }
     depsOf.set(t.id, deps);

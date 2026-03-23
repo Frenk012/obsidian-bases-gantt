@@ -1,7 +1,7 @@
 import { Menu } from 'obsidian';
-import type { GanttChartView } from './gantt-view';
-import type { GanttTask } from './task-mapper';
-import { GROUP_HEADER_PREFIX } from './task-mapper';
+import type { GanttChartView } from '../gantt-view';
+import type { GanttTask } from '../task-mapper';
+import { GROUP_HEADER_PREFIX } from '../task-mapper';
 
 /** Register right-click context menu on the Gantt chart element. */
 export function registerContextMenu(view: GanttChartView): void {

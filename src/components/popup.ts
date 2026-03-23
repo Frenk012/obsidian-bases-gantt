@@ -1,8 +1,9 @@
 import type { PopupContext } from 'frappe-gantt';
 import { MarkdownRenderer } from 'obsidian';
-import type { GanttChartView } from './gantt-view';
-import type { GanttTask } from './task-mapper';
-import { GROUP_HEADER_PREFIX } from './task-mapper';
+import type { GanttChartView } from '../gantt-view';
+import { escapeHtml, getDeps } from '../helpers/utils';
+import type { GanttTask } from '../task-mapper';
+import { GROUP_HEADER_PREFIX } from '../task-mapper';
 
 /** Format a date for display in popups (shorter, human-friendly). */
 function formatDisplayDate(date: Date): string {
@@ -21,15 +22,6 @@ function formatDisplayDate(date: Date): string {
     'Dec',
   ];
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-}
-
-/** Escape HTML to prevent XSS in popup content. */
-export function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 /** Render content inside Frappe Gantt's hover popup. */
@@ -77,12 +69,7 @@ export function renderPopup(
   }
 
   if (ctx.task.dependencies) {
-    const deps = Array.isArray(ctx.task.dependencies)
-      ? ctx.task.dependencies
-      : String(ctx.task.dependencies)
-          .split(',')
-          .map((d) => d.trim())
-          .filter(Boolean);
+    const deps = getDeps(ctx.task.dependencies);
     const depNames = deps.map((depId) => {
       const depTask = findTask(depId);
       return depTask ? escapeHtml(depTask.name) : depId;

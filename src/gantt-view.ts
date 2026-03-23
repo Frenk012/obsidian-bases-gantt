@@ -8,10 +8,13 @@ import {
   NumberValue,
   type QueryController,
 } from 'obsidian';
-import { formatDateForFrontmatter, parseObsidianDate } from './date-utils';
-import { getGanttViewOptions } from './gantt-config';
-import { registerContextMenu } from './gantt-context-menu';
-import { renderPopup } from './gantt-popup';
+import { getGanttViewOptions } from './components/config';
+import { registerContextMenu } from './components/menu';
+import { renderPopup } from './components/popup';
+import {
+  formatDateForFrontmatter,
+  parseObsidianDate,
+} from './helpers/date-utils';
 import {
   createGroupHeaderTask,
   type GanttTask,
