@@ -4,7 +4,7 @@
 	"description": "Gantt chart view for Obsidian Bases",
 	"main": "main.js",
 	"scripts": {
-		"dev": "bun run build.ts",
+		"dev": "bun run build.ts --watch",
 		"build": "bun run build.ts production"
 	},
 	"author": "lhassa8",
