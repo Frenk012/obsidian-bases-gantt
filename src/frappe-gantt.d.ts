@@ -5,7 +5,7 @@ declare module 'frappe-gantt' {
 		start: string;
 		end: string;
 		progress?: number;
-		dependencies?: string;
+		dependencies?: string | string[];
 		custom_class?: string;
 		// Internal fields set by Gantt
 		_start?: Date;

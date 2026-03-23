@@ -22,10 +22,9 @@ export class GanttChartView extends BasesView {
 	static instances: Set<GanttChartView> = new Set();
 
 	private containerEl: HTMLElement;
-	private ganttEl: HTMLElement;
+	private ganttEl!: HTMLElement;
 	private gantt: Gantt | null = null;
 	private configSnapshot = '';
-	private currentTasks: GanttTask[] = [];
 	private taskMap: Map<string, GanttTask> = new Map();
 	/** Flag to suppress on_click after a drag operation. */
 	private justDragged = false;
@@ -55,7 +54,6 @@ export class GanttChartView extends BasesView {
 			document.removeEventListener('mouseup', handler);
 		}
 		this.capturedGlobalHandlers = [];
-		this.currentTasks = [];
 		this.taskMap.clear();
 	}
 
@@ -123,7 +121,6 @@ export class GanttChartView extends BasesView {
 			tasks = mapEntriesToTasks(this.data.data, config);
 		}
 
-		this.currentTasks = tasks;
 		this.taskMap.clear();
 		for (const t of tasks) this.taskMap.set(t.id, t);
 
@@ -437,8 +434,10 @@ export class GanttChartView extends BasesView {
 		}
 
 		if (ctx.task.dependencies) {
-			const depNames = ctx.task.dependencies.split(',')
-				.map(d => d.trim()).filter(Boolean)
+			const deps = Array.isArray(ctx.task.dependencies)
+				? ctx.task.dependencies
+				: String(ctx.task.dependencies).split(',').map(d => d.trim()).filter(Boolean);
+			const depNames = deps
 				.map(depId => {
 					const depTask = this.findTask(depId);
 					return depTask ? this.escapeHtml(depTask.name) : depId;
