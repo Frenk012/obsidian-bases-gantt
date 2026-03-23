@@ -21,6 +21,7 @@
 .bases-gantt-view .gantt-container {
 	font-family: var(--font-interface);
 	border-radius: var(--radius-m);
+	min-height: 100%;
 }
 
 /* Bar labels */
