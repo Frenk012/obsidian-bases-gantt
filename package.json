@@ -25,6 +25,6 @@
     "obsidian": "1.12.3"
   },
   "dependencies": {
-    "frappe-gantt": "1.2.2"
+    "frappe-gantt": "^1.2.2"
   }
 }

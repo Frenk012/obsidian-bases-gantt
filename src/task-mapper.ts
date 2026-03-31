@@ -136,16 +136,16 @@ export function mapEntriesToTasks(
       const endVal = entry.getValue(config.endProperty);
       endDate = parseObsidianDate(extractRawValue(endVal));
     }
-    // Default: if no end date, task spans 1 day
-    if (!endDate) {
-      endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 1);
-    }
 
-    // Ensure end >= start
-    if (endDate < startDate) {
+    // Milestone detection must happen before any date clamping:
+    // a task is a milestone only when the user explicitly set end == start.
+    const isMilestone = endDate != null && startDate.getTime() === endDate.getTime();
+
+    // Default: if no end date or invalid (end before start), use start date.
+    // Frappe Gantt uses inclusive end dates (it adds 24h to midnight end dates
+    // internally), so passing startDate as endDate yields a correct 1-day bar.
+    if (!endDate || endDate < startDate) {
       endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 1);
     }
 
     // Label
@@ -219,18 +219,12 @@ export function mapEntriesToTasks(
       }
     }
 
-    // Milestone: start === end → render as a very short bar (Frappe handles this)
-    const isMilestone = startDate.getTime() === endDate.getTime();
-    if (isMilestone) {
-      // Give milestones a minimal duration so Frappe can render them
-      endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 1);
-      // Note: custom_class must NOT contain spaces — classList.add() in
-      // Frappe Gantt's bar.refresh() throws DOMException on spaces.
-      // Use only a single class; milestone styling is secondary to color.
-      if (!custom_class) {
-        custom_class = 'gantt-milestone';
-      }
+    // Milestone: apply styling (Frappe's +24h on midnight end dates gives
+    // a 1-day bar automatically; no manual +1 day needed).
+    // Note: custom_class must NOT contain spaces — classList.add() in
+    // Frappe Gantt's bar.refresh() throws DOMException on spaces.
+    if (isMilestone && !custom_class) {
+      custom_class = 'gantt-milestone';
     }
 
     tasks.push({

@@ -3,3 +3,9 @@ main.js
 styles.css
 *.map
 .DS_Store
+/.idea/.gitignore
+/.idea/material_theme_project_new.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/obsidian-bases-gantt.iml
+/.idea/vcs.xml

@@ -5,6 +5,7 @@ import {
   BasesView,
   DateValue,
   Notice,
+  NullValue,
   NumberValue,
   type QueryController,
 } from 'obsidian';
@@ -119,11 +120,15 @@ export class GanttChartView extends BasesView {
 
   updateTaskProgress(task: GanttTask, pct: number): void {
     const mapperConfig = this.getTaskMapperConfig();
-    if (mapperConfig.progressProperty) {
-      const propName = this.extractPropertyName(mapperConfig.progressProperty);
-      void this.writeFrontmatter(task.filePath, { [propName]: pct });
-      this.gantt?.update_task(task.id, { progress: pct });
+    if (!mapperConfig.progressProperty) {
+      new Notice(
+        'Configure a progress property in the view settings to track progress.',
+      );
+      return;
     }
+    const propName = this.extractPropertyName(mapperConfig.progressProperty);
+    void this.writeFrontmatter(task.filePath, { [propName]: pct });
+    this.gantt?.update_task(task.id, { progress: pct });
   }
 
   // ── Data pipeline ────────────────────────────────────────────────
@@ -360,17 +365,24 @@ export class GanttChartView extends BasesView {
       };
     }
 
-    const firstEntry = entries[0];
+    // Scan all entries to classify property types — using only the first entry
+    // would miss properties that exist in some notes but not the first one.
     const dateProps: BasesPropertyId[] = [];
     const numberProps: BasesPropertyId[] = [];
     const stringProps: BasesPropertyId[] = [];
+    const classified = new Set<BasesPropertyId>();
 
-    for (const propId of this.allProperties) {
-      const val = firstEntry.getValue(propId);
-      if (val == null) continue;
-      if (val instanceof DateValue) dateProps.push(propId);
-      else if (val instanceof NumberValue) numberProps.push(propId);
-      else stringProps.push(propId);
+    for (const entry of entries) {
+      if (classified.size === this.allProperties.length) break;
+      for (const propId of this.allProperties) {
+        if (classified.has(propId)) continue;
+        const val = entry.getValue(propId);
+        if (val == null || val instanceof NullValue) continue;
+        classified.add(propId);
+        if (val instanceof DateValue) dateProps.push(propId);
+        else if (val instanceof NumberValue) numberProps.push(propId);
+        else stringProps.push(propId);
+      }
     }
 
     const getName = (id: BasesPropertyId): string => {
