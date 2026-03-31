@@ -85,6 +85,15 @@ function showEmptyContextMenu(view: GanttChartView, evt: MouseEvent): void {
 
   menu.addItem((item) => {
     item
+      .setTitle('New task')
+      .setIcon('plus')
+      .onClick(() => view.openCreateModal());
+  });
+
+  menu.addSeparator();
+
+  menu.addItem((item) => {
+    item
       .setTitle('Scroll to today')
       .setIcon('calendar')
       .onClick(() => view.scrollToToday());

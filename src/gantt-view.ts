@@ -10,6 +10,7 @@ import {
   type QueryController,
 } from 'obsidian';
 import { getGanttViewOptions } from './components/config';
+import { GanttTaskModal } from './components/create-modal';
 import { registerContextMenu } from './components/menu';
 import { renderPopup } from './components/popup';
 import {
@@ -39,6 +40,8 @@ export class GanttChartView extends BasesView {
 
   private configSnapshot = '';
   private taskMap: Map<string, GanttTask> = new Map();
+  /** Cached result of getTaskMapperConfig — invalidated at each onDataUpdated. */
+  private taskMapperConfigCache: TaskMapperConfig | null = null;
   /** Flag to suppress on_click after a drag operation. */
   private justDragged = false;
   /** Scroll to today only on first render. */
@@ -106,6 +109,17 @@ export class GanttChartView extends BasesView {
     this.taskMap.clear();
     for (const t of tasks) this.taskMap.set(t.id, t);
     this.gantt.refresh(tasks);
+    this.applyCustomColors(tasks);
+  }
+
+  openCreateModal(initialDate?: string): void {
+    const config = this.getTaskMapperConfig();
+    new GanttTaskModal(
+      this.app,
+      config,
+      (name, processor) => this.createFileForView(name, processor),
+      initialDate,
+    ).open();
   }
 
   setViewMode(mode: string): void {
@@ -136,6 +150,8 @@ export class GanttChartView extends BasesView {
   onDataUpdated(): void {
     if (!this.data?.data || !this.ganttEl) return;
 
+    // Invalidate config cache — new data means properties/values may have changed.
+    this.taskMapperConfigCache = null;
     const config = this.getTaskMapperConfig();
     const newSnapshot = `${JSON.stringify(config)}|${this.getDisplayConfigSnapshot()}`;
 
@@ -181,6 +197,7 @@ export class GanttChartView extends BasesView {
         return;
       }
       this.gantt.refresh(tasks);
+      this.applyCustomColors(tasks);
     } else {
       // Config changed or first render — recreate
       this.configSnapshot = newSnapshot;
@@ -250,13 +267,21 @@ export class GanttChartView extends BasesView {
 
         const mapperConfig = this.getTaskMapperConfig();
         const updates: Record<string, string> = {};
+        const newStart = formatDateForFrontmatter(start);
+        const newEnd = formatDateForFrontmatter(end);
+        // Detect resize vs move: on resize only end changes, start stays same.
+        const startChanged = newStart !== ganttTask.start;
+
         if (mapperConfig.startProperty) {
-          updates[this.extractPropertyName(mapperConfig.startProperty)] =
-            formatDateForFrontmatter(start);
+          updates[this.extractPropertyName(mapperConfig.startProperty)] = newStart;
         }
         if (mapperConfig.endProperty) {
-          updates[this.extractPropertyName(mapperConfig.endProperty)] =
-            formatDateForFrontmatter(end);
+          // Write end if the note originally had an explicit end-date, OR if
+          // the user resized (start unchanged) — meaning they intentionally
+          // changed the duration of a previously open-ended task.
+          if (ganttTask.hasExplicitEnd || !startChanged) {
+            updates[this.extractPropertyName(mapperConfig.endProperty)] = newEnd;
+          }
         }
         void this.writeFrontmatter(ganttTask.filePath, updates);
       },
@@ -313,11 +338,37 @@ export class GanttChartView extends BasesView {
         if (wrapper) wrapper.classList.add('gantt-milestone');
       }
     }
+
+    this.applyCustomColors(tasks);
+  }
+
+  /** Apply inline SVG fill/stroke for tasks that specify a direct CSS color. */
+  private applyCustomColors(tasks: GanttTask[]): void {
+    for (const task of tasks) {
+      if (!task.customColor) continue;
+      const wrapper = this.ganttEl.querySelector<Element>(
+        `.bar-wrapper[data-id="${task.id}"]`,
+      );
+      if (!wrapper) continue;
+      const color = task.customColor;
+      const bar = wrapper.querySelector<SVGElement>('.bar');
+      if (bar) {
+        bar.style.fill = color;
+        bar.style.stroke = color;
+      }
+      const progress = wrapper.querySelector<SVGElement>('.bar-progress');
+      if (progress) {
+        progress.style.fill = color;
+        progress.style.opacity = '0.6';
+      }
+    }
   }
 
   // ── Private helpers ──────────────────────────────────────────────
 
   private getTaskMapperConfig(): TaskMapperConfig {
+    if (this.taskMapperConfigCache) return this.taskMapperConfigCache;
+
     let startProperty = this.config.getAsPropertyId('startDate');
     let endProperty = this.config.getAsPropertyId('endDate');
     const labelProperty = this.config.getAsPropertyId('label');
@@ -334,17 +385,30 @@ export class GanttChartView extends BasesView {
       colorByProperty = detected.colorBy ?? colorByProperty;
     }
 
-    return {
+    // Detect a direct-color property (named "color" or "colour") from all
+    // available properties — no manual config needed.
+    const colorValueProperty =
+      this.allProperties?.find((id) => {
+        const dot = id.indexOf('.');
+        const name = (dot >= 0 ? id.slice(dot + 1) : id)
+          .toLowerCase()
+          .replace(/[-_]/g, '');
+        return name === 'color' || name === 'colour';
+      }) ?? null;
+
+    this.taskMapperConfigCache = {
       startProperty,
       endProperty,
       labelProperty,
       dependenciesProperty,
       colorByProperty,
+      colorValueProperty,
       progressProperty,
       showProgress:
         (this.config.get('showProgress') as boolean) ??
         progressProperty != null,
     };
+    return this.taskMapperConfigCache;
   }
 
   private autoDetectProperties(): {
@@ -465,13 +529,22 @@ export class GanttChartView extends BasesView {
   ): Promise<void> {
     this.pendingWrites++;
     const file = this.app.vault.getFileByPath(filePath);
-    if (!file) return;
-
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-      for (const [key, value] of Object.entries(updates)) {
-        frontmatter[key] = value;
-      }
-    });
+    if (!file) {
+      // No file change will occur, so no echo refresh to suppress.
+      this.pendingWrites--;
+      return;
+    }
+    try {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+        for (const [key, value] of Object.entries(updates)) {
+          frontmatter[key] = value;
+        }
+      });
+    } catch (e) {
+      // Write failed — no echo refresh will occur, restore the counter.
+      this.pendingWrites--;
+      console.error('Bases Gantt: failed to write frontmatter', e);
+    }
   }
 
   private renderEmptyState(config: TaskMapperConfig): void {

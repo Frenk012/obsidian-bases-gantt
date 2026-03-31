@@ -175,9 +175,17 @@
 /* ── Milestone rendering ─────────────────────────────────────────── */
 
 .bases-gantt-view .gantt .gantt-milestone .bar {
-  rx: 2;
-  ry: 2;
-  opacity: 0.9;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  rx: 0;
+  ry: 0;
+  opacity: 0.95;
+}
+
+/* Progress fill and resize handle make no sense for a milestone */
+.bases-gantt-view .gantt .gantt-milestone .bar-progress,
+.bases-gantt-view .gantt .gantt-milestone .bar-expected-progress,
+.bases-gantt-view .gantt .gantt-milestone .handle {
+  display: none;
 }
 
 /* ── Rich hover popup ────────────────────────────────────────────── */

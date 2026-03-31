@@ -13,6 +13,10 @@ import { getDeps } from './helpers/utils';
 export interface GanttTask extends FrappeTask {
   filePath: string;
   isMilestone?: boolean;
+  /** True when the note explicitly had an end-date property (not defaulted). */
+  hasExplicitEnd: boolean;
+  /** CSS color string from the note's `color` property (overrides palette). */
+  customColor?: string;
 }
 
 /** Configuration for mapping entries to tasks, derived from view options. */
@@ -22,6 +26,8 @@ export interface TaskMapperConfig {
   labelProperty: BasesPropertyId | null;
   dependenciesProperty: BasesPropertyId | null;
   colorByProperty: BasesPropertyId | null;
+  /** Property containing a literal CSS color value (e.g. `color: "#e74c3c"`). */
+  colorValueProperty: BasesPropertyId | null;
   progressProperty: BasesPropertyId | null;
   showProgress: boolean;
 }
@@ -98,18 +104,25 @@ export function mapEntriesToTasks(
   if (!config.startProperty) return [];
 
   // First pass: build maps for dependency resolution.
-  // We map both basename and path-without-extension → task ID so that
-  // [[Note]] and [[folder/Note]] wiki-links both resolve correctly.
-  // When basenames collide, the basename key maps to the LAST entry,
-  // but the full-path key is always unambiguous.
+  // Full path (no extension) is always unambiguous.
+  // Basename is only mapped when it is unique — if two notes share the same
+  // basename, [[Note]] is ambiguous and we leave it unresolvable rather than
+  // silently pointing to the wrong task.
   const nameToId = new Map<string, string>();
+  const ambiguousBasenames = new Set<string>();
   for (const entry of entries) {
     const id = makeTaskId(entry.file.path);
-    nameToId.set(entry.file.basename, id);
-    // Path without extension, e.g. "projects/Task A"
+    if (nameToId.has(entry.file.basename)) {
+      ambiguousBasenames.add(entry.file.basename);
+    } else {
+      nameToId.set(entry.file.basename, id);
+    }
+    // Path without extension, e.g. "projects/Task A" — always unambiguous
     const pathNoExt = entry.file.path.replace(/\.[^.]+$/, '');
     nameToId.set(pathNoExt, id);
   }
+  // Remove colliding basenames so [[Note]] never silently resolves wrong
+  for (const name of ambiguousBasenames) nameToId.delete(name);
 
   // Collect unique values for color mapping
   const colorValues = new Map<string, number>();
@@ -137,9 +150,12 @@ export function mapEntriesToTasks(
       endDate = parseObsidianDate(extractRawValue(endVal));
     }
 
+    // Track whether end was explicitly provided (vs defaulted).
+    const hasExplicitEnd = endDate != null;
+
     // Milestone detection must happen before any date clamping:
     // a task is a milestone only when the user explicitly set end == start.
-    const isMilestone = endDate != null && startDate.getTime() === endDate.getTime();
+    const isMilestone = hasExplicitEnd && startDate.getTime() === endDate!.getTime();
 
     // Default: if no end date or invalid (end before start), use start date.
     // Frappe Gantt uses inclusive end dates (it adds 24h to midnight end dates
@@ -182,8 +198,9 @@ export function mapEntriesToTasks(
         const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
         const depIds: string[] = [];
         for (const match of depStr.matchAll(wikiLinkRegex)) {
-          const linkTarget = match[1].trim();
-          // Look up by basename
+          // Strip heading anchors: [[Note#Section]] → "Note"
+          const linkTarget = match[1].split('#')[0].trim();
+          // Prefer full-path match (unambiguous), fall back to basename
           const targetId = nameToId.get(linkTarget);
           if (targetId) {
             depIds.push(targetId);
@@ -219,6 +236,13 @@ export function mapEntriesToTasks(
       }
     }
 
+    // Direct CSS color from the note's `color` / `colour` property.
+    let customColor: string | undefined;
+    if (config.colorValueProperty) {
+      const raw = extractRawValue(entry.getValue(config.colorValueProperty));
+      if (raw) customColor = String(raw).trim() || undefined;
+    }
+
     // Milestone: apply styling (Frappe's +24h on midnight end dates gives
     // a 1-day bar automatically; no manual +1 day needed).
     // Note: custom_class must NOT contain spaces — classList.add() in
@@ -237,6 +261,8 @@ export function mapEntriesToTasks(
       custom_class,
       filePath: entry.file.path,
       isMilestone,
+      hasExplicitEnd,
+      customColor,
     });
   }
 

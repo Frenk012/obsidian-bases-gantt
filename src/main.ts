@@ -15,6 +15,17 @@ export default class BasesGanttPlugin extends Plugin {
     // ── Command palette shortcuts ─────────────────────────────────
 
     this.addCommand({
+      id: 'gantt-create-task',
+      name: 'Create new task',
+      icon: 'plus',
+      checkCallback: (checking) => {
+        const view = this.getActiveGanttView();
+        if (checking) return !!view;
+        view?.openCreateModal();
+      },
+    });
+
+    this.addCommand({
       id: 'gantt-scroll-today',
       name: 'Scroll to today',
       icon: 'calendar',
